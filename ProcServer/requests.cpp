@@ -1,6 +1,11 @@
 #include "requests.h"
 
 
+login::login(){
+
+}
+
+
 login::~login() {
 	InternetCloseHandle(hsession);
 	InternetCloseHandle(hconnection);
@@ -79,7 +84,6 @@ std::string  login::GetHtml(HINTERNET hrequest) {
 			printf("InternetReadFile error : <%lu>\n", GetLastError());
 			break;
 		}
-		std::cout << buffer;
 		buffer[dwBytesRead] = 0;
 		html += buffer;
 
@@ -144,13 +148,13 @@ HINTERNET login::OpenRequest(std::string verb = "GET", std::string destination =
 
 
 bool login::GetCookies() {
-	hfirstrequest = OpenRequest(); //Create request
+	HINTERNET hfirstrequest = OpenRequest(); //Create request
 	AddHeaders(hfirstrequest, generalheaders); //Add headers to request
 	SendRequest(hfirstrequest); //Send request
 	SetCookies(GetCookieFromResponse(hfirstrequest));
 	InternetCloseHandle(hfirstrequest);
 
-	hsecondrequest = OpenRequest("GET","/wunet/Logowanie2.aspx");
+	HINTERNET hsecondrequest = OpenRequest("GET","/wunet/Logowanie2.aspx");
 	BOOL decoding = 1;
 	InternetSetOption(hsecondrequest, INTERNET_OPTION_HTTP_DECODING, &decoding, sizeof(decoding));
 	AddHeaders(hsecondrequest, generalheaders);
@@ -158,18 +162,13 @@ bool login::GetCookies() {
 	AddHeaders(hsecondrequest, cookieheader);
 	SendRequest(hsecondrequest);
 	SetCookies(GetCookieFromResponse(hsecondrequest));
-	char buf[9999]{};
-	DWORD dwsize = 9999;
-	DWORD dwFileSize;
-	dwFileSize = BUFSIZ;
-	HttpQueryInfoA(hsecondrequest, HTTP_QUERY_RAW_HEADERS_CRLF, buf, &dwsize, NULL);
-	std::cout << buf << std::endl;
 	
-
 	std::string html = GetHtml(hsecondrequest);//get html for response from ../Logowanie2.aspx
+
 	htmlparser parser(html); //this objects will be used for data parsing 
 	viewstate += parser.Find("id=\"__VIEWSTATE\"");
 	viewstategenerator += parser.Find("id=\"__VIEWSTATEGENERATOR\"");
+
 	InternetCloseHandle(hsecondrequest);
 
 	return 0;
@@ -198,6 +197,6 @@ bool login::Login() {
 bool login::GetPersonData() {
 	SetupConnection();
 	GetCookies();
-	//Login();
+	//Login();	
 	return 0;
 }
