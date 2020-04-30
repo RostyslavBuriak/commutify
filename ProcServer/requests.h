@@ -1,5 +1,6 @@
 #pragma once
 #include <windows.h>
+#include <memory>
 #include <wininet.h>
 #include <stdio.h>
 #include <iostream>
@@ -11,14 +12,18 @@ class login
 public:
 	bool GetPersonData();
 
+	login() = default;
+	login(const login& obj) = default;
+
 	~login();
 
+	login& operator=(const login&);
 private:
-	HINTERNET hsession = 0,hconnection = 0,hloginrequest = 0, hfirstrequest = 0, hsecondrequest = 0;
+	HINTERNET hsession = 0,hconnection = 0,hloginrequest = 0;
 
 	std::string cookieheader = "Cookie: default_login_type = 0";
 
-	std::string generalheaders = "Accept: text/html, application/xhtml+xml, image/jxr, */*\r\n"
+	const std::string generalheaders = "Accept: text/html, application/xhtml+xml, image/jxr, */*\r\n"
 								 "Accept-Encoding: gzip, deflate\r\n"
 								 "Accept-Language: en-US\r\n"
 								 "Connection: Keep-Alive\r\n"
@@ -39,6 +44,5 @@ private:
 
 	std::string GetCookieFromResponse(HINTERNET&);
 	std::string  GetHtml(HINTERNET);
-	std::string InflateData(std::string);
 };
 

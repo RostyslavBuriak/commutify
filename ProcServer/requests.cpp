@@ -1,16 +1,22 @@
 #include "requests.h"
 
 
-login::login(){
-
-}
-
-
 login::~login() {
 	InternetCloseHandle(hsession);
 	InternetCloseHandle(hconnection);
 	InternetCloseHandle(hloginrequest);
 }	
+
+
+login& login::operator=(const login& obj) {
+	hsession = obj.hsession;
+	hconnection = obj.hconnection;
+	hloginrequest = obj.hloginrequest;
+	cookieheader = obj.cookieheader;
+	viewstate = obj.viewstate;
+	viewstategenerator = obj.viewstategenerator;
+	return *this;
+}
 
 
 bool login::SetupConnection() {
@@ -58,7 +64,7 @@ bool login::SetCookies(std::string cookie) {
 
 
 bool login::AddHeaders(HINTERNET& hrequest, std::string headers) {
-	HttpAddRequestHeadersA(hrequest, headers.data(), headers.length(), HTTP_ADDREQ_FLAG_ADD);
+	HttpAddRequestHeadersA(hrequest, headers.data(), (DWORD)headers.length(), HTTP_ADDREQ_FLAG_ADD);
 
 	return 0;
 }

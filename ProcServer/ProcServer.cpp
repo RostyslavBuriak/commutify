@@ -2,7 +2,7 @@
 #include "requests.h"
 #pragma comment (lib, "Wininet.lib")
 
-int main(int argc, char* argv[]) {
+int main() {
 
 	login l;
 	l.GetPersonData();
