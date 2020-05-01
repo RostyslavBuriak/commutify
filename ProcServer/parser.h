@@ -8,8 +8,14 @@ class htmlparser
 {
 public:
 	explicit htmlparser(std::string);
+	htmlparser(const htmlparser&) = delete;
 
-	std::string Find(std::string);
+	~htmlparser() = default;
+
+	htmlparser& operator=(const htmlparser&) = delete;
+
+	std::string ViewDataParse(std::string);
+	std::string SrudentDataParse(std::string);
 private:
 	std::string text;
 };

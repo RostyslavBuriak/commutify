@@ -1,10 +1,7 @@
-#include <windows.h>
 #include "requests.h"
-#pragma comment (lib, "Wininet.lib")
 
 int main() {
-
-	login l;
+	login l("login","pswrd");
 	l.GetPersonData();
 	return 0;
 }
