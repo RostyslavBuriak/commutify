@@ -4,21 +4,26 @@
 #include "parser.h"
 #include "inhandle.h"
 
+
 class login
 {
 public:
 	bool GetPersonData();
 
-	login(const std::string, const std::string);
+	login(Student*);
 	login(const login& obj);
+	login(login&&) noexcept;
 
 	~login();
 
 	login& operator=(const login&);
+	login& operator=(login&&) noexcept;
 private:
-	inhandle hsession,hconnection,hloginrequest;
+	Student* student;
 
-	std::string userlogin, userpassword, params;
+	inhandle hsession,hconnection;
+
+	std::string params;
 
 	std::string cookieheader = "Cookie: default_login_type = 0";
 
@@ -32,17 +37,22 @@ private:
 
 	std::string viewstate = "__VIEWSTATE=";
 
-	bool GetCookies();
-	bool AddHeaders(inhandle&, std::string);
-	bool SetupConnection();
-	bool SendRequest(inhandle&,std::string);
-	bool SetCookies(std::string);
-	bool Login();
+	void GetCookies();
+	void AddHeaders(inhandle&, std::string);
+	void SetupConnection();
+	void SendRequest(inhandle&,std::string);
+	void SetCookies(std::string);
+	void SetLanguage(std::string);
+	void Login();
+	void GetStudentData();
+	void GetStudentSubjectsData();
 
 	HINTERNET OpenRequest(std::string, std::string);
 
 	std::string GetCookieFromResponse(inhandle&);
-	std::string  GetHtml(inhandle&);
+	std::string GetHtml(inhandle&);
 	std::string TextToUrlEncoded(const std::string&);
+
+	bool CheckResponse(inhandle&);
 };
 

@@ -1,7 +1,11 @@
-#include "requests.h"
+#include "server.h"
 
 int main() {
-	login l("login","pswrd");
-	l.GetPersonData();
+
+	server s;
+	s.Start();
+
+	s.Stop();
+
 	return 0;
 }

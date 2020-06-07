@@ -1,4 +1,5 @@
 #pragma once
+#include <winsock2.h>
 #include <Windows.h>
 #include <wininet.h>
 #include <string.h>
@@ -12,13 +13,13 @@ public:
 	inhandle() = default;
 	explicit inhandle(HINTERNET) noexcept;
 	inhandle(const inhandle&) = delete;
-	inhandle(inhandle&&);
+	inhandle(inhandle&&)noexcept;
 
 	~inhandle();
 
 	inhandle& operator=(const inhandle&) = delete;
-	inhandle& operator=(inhandle&&);
-	inhandle& operator=(HINTERNET);
+	inhandle& operator=(inhandle&&) noexcept;
+	inhandle& operator=(HINTERNET&&);
 
 	operator HINTERNET() const noexcept;
 	operator bool() const noexcept;
