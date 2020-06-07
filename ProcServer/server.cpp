@@ -9,6 +9,9 @@ void server::Stop() {
 }
 
 
+server::server(ThreadPool* _tp) :tp(_tp) {}
+
+
 bool server::Connected(SOCKET sckt) {
     std::lock_guard<std::mutex> lg(list_mtx); //critical section
 
@@ -28,14 +31,12 @@ void server::ConnectionAccepter() {
     WSADATA wsaDataRcp;
     WSAStartup(MAKEWORD(2, 2), &wsaDataRcp);
 
-    std::cout  << "worked\n";
-
     SOCKET client;
 
     sockaddr_in client_addr;
     int client_len = sizeof(client_addr);
 
-    while (TRUE)
+    while (!stop)
     {
         if ((client = WSAAccept(server_socket, NULL, NULL, NULL, 0)) == SOCKET_ERROR)
         {
@@ -80,230 +81,233 @@ void server::DataHandler() {
 
     while (true) {
 
-            if (GetQueuedCompletionStatus(com_port, &BytesTransferred,
-                (LPDWORD)&usr, (LPOVERLAPPED*)&sock_data, INFINITE) == 0)
-            {
-                printf("GetQueuedCompletionStatus() failed with error %d\n", GetLastError());
-
-                if (WSAGetLastError() != 64) //error code 64 indicates that client has disconnected
-                    return;
-            }
-
-        if (!BytesTransferred) { //user disconnected
-
-            FindAndErase(usr); //delete user from connected users list
-            closesocket(usr->sckt); //close user socket
-            delete usr; //clear all user data
-
+        if (!GetQueuedCompletionStatus(com_port, &BytesTransferred,
+            (LPDWORD)&usr, (LPOVERLAPPED*)&sock_data, 5000)) //wait 5 second for event and return false if no event occured
+        {
+            if (stop) //if no event occured check if we should stop the thread otherwise wait some more
+                break;
         }
-
         else
         {
+            if (!BytesTransferred) { //user disconnected
 
-            std::string command = sock_data->Buffer; //copy buffer to the string for convenient work
+                FindAndErase(usr); //delete user from connected users list
+                closesocket(usr->sckt); //close user socket
+                delete usr; //clear all user data
 
-            memset(sock_data->Buffer, 0, buff_size); //clear buffer
+            }
 
-            if (command.substr(0,7) == "connect") {
+            else
+            {
 
-                std::istringstream sstream(command);
+                std::string command = sock_data->Buffer; //copy buffer to the string for convenient work
 
-                sstream >> usr->student.login >> usr->student.login; //double >> for skipping 'connect' word
+                memset(sock_data->Buffer, 0, buff_size); //clear buffer
 
-                sstream >> usr->student.password;
+                if (command.substr(0, 7) == "connect") {
 
-                login lgn(&usr->student); //try to get user data
-                lgn.GetPersonData();
+                    std::istringstream sstream(command);
 
-                if (!usr->student.semester.empty()) { //if user exists
+                    sstream >> usr->student.login >> usr->student.login; //double >> for skipping 'connect' word
 
-                    {
-                        std::lock_guard<std::mutex>lg(list_mtx); //critical section
-                        connected_users.push_back(usr); // add user to connected users list
-                    }
+                    sstream >> usr->student.password;
 
-                    std::string server_OK = "SERVER OK " + usr->student.name //create SERVER OK response with all user data
-                        + "%" + usr->student.faculty 
-                        + "%" + usr->student.department 
-                        + "%" + usr->student.semester 
-                        + "%" + usr->student.specialization;
+                    login lgn(&usr->student); //try to get user data
+                    lgn.GetPersonData();
 
-                    WSABUF server_ok{ server_OK.size(), &server_OK[0] }; //server answer if everything is OK
+                    if (!usr->student.semester.empty()) { //if user exists
 
-                    if (WSASend(usr->sckt, &server_ok, 1, &SendBytes, 0, &sock_data->Overlapped, NULL) == SOCKET_ERROR) { //send response that everything is OK
-
-                        if (WSAGetLastError() != ERROR_IO_PENDING)
                         {
-
-                            printf("WSASend() failed with error %d\n", WSAGetLastError());
-                            return;
-
+                            std::lock_guard<std::mutex>lg(list_mtx); //critical section
+                            connected_users.push_back(usr); // add user to connected users list
                         }
 
-                    }
+                        std::string server_OK = "SERVER OK " + usr->student.name //create SERVER OK response with all user data
+                            + "%" + usr->student.faculty
+                            + "%" + usr->student.department
+                            + "%" + usr->student.semester
+                            + "%" + usr->student.specialization;
 
-                    SQLHANDLE sqlFacultyCheck = NULL; //query handle
+                        WSABUF server_ok{ server_OK.size(), &server_OK[0] }; //server answer if everything is OK
 
-                    if (0 != SQLAllocHandle(3, sqlConnHandle, &sqlFacultyCheck))
-                        DataBaseDissconnect();
+                        if (WSASend(usr->sckt, &server_ok, 1, &SendBytes, 0, &sock_data->Overlapped, NULL) == SOCKET_ERROR) { //send response that everything is OK
 
-                    std::wstring faculty_check = L"select count(*) from chat where chat.faculty = '" + std::wstring(usr->student.faculty.begin(), usr->student.faculty.end()) + L"'";
+                            if (WSAGetLastError() != ERROR_IO_PENDING)
+                            {
 
-                    if (0 != SQLExecDirectW(sqlFacultyCheck, (SQLWCHAR*)faculty_check.data(), -3)) { //try to query
-
-                        DataBaseDissconnect();
-
-                    }
-                    else { //if query is OK
-
-                        //declare output variable and pointer
-                        SQLCHAR sqlVersion[SQL_RESULT_LEN];
-                        SQLINTEGER ptrSqlVersion;
-                        while (SQLFetch(sqlFacultyCheck) == 0) { //for every query result
-
-                            SQLGetData(sqlFacultyCheck, 1, 1, sqlVersion, SQL_RESULT_LEN, &ptrSqlVersion);
-
-                            std::string count = (char*)sqlVersion;
-
-                            SQLFreeHandle(3, sqlFacultyCheck); //release query handle
-
-                            if (count == "0") { //if threr is no faculty
-
-                                SQLHANDLE sqlFacultyInsert = NULL; //query handle
-
-                                if (0 != SQLAllocHandle(3, sqlConnHandle, &sqlFacultyInsert))
-                                    DataBaseDissconnect();
-
-                                faculty_check = L"insert into chat (faculty) values('" + std::wstring(usr->student.faculty.begin(), usr->student.faculty.end()) + L"')";
-
-                                if (0 != SQLExecDirectW(sqlFacultyInsert, (SQLWCHAR*)faculty_check.data(), -3)) { //try to query
-
-                                    DataBaseDissconnect();
-
-                                }
-
-                                SQLFreeHandle(3, sqlFacultyInsert); //release query handle
+                                printf("WSASend() failed with error %d\n", WSAGetLastError());
+                                return;
 
                             }
 
-                            else
-                            {
-                                //NOW WE HAVE TO SEND ALL NEEDED MESSAGES TO CLIENT, CLIENT SENDS 'command login password meesage_id' , we have to send all NEW messages to client
+                        }
 
-                                std::string last_mess; //last message id which client has
+                        SQLHANDLE sqlFacultyCheck = NULL; //query handle
 
-                                sstream >> last_mess;
+                        if (0 != SQLAllocHandle(3, sqlConnHandle, &sqlFacultyCheck))
+                            DataBaseDissconnect();
 
-                                std::wstring request = L"select * from messages m inner join chat c on m.chat_id = c.chat_id where c.faculty = '" //create query 
-                                    + std::wstring(usr->student.faculty.begin(), usr->student.faculty.end())
-                                    + L"' and m.message_id > " + std::wstring(last_mess.begin(), last_mess.end())
-                                    + L" and m.msg_from <> '" + std::wstring(usr->student.login.begin(), usr->student.login.end()) + L"'";
+                        std::wstring faculty_check = L"select count(*) from chat where chat.faculty = '" + std::wstring(usr->student.faculty.begin(), usr->student.faculty.end()) + L"'";
 
-                                SQLHANDLE sqlStmtHandle = NULL; //query handle
+                        if (0 != SQLExecDirectW(sqlFacultyCheck, (SQLWCHAR*)faculty_check.data(), -3)) { //try to query
 
-                                if (0 != SQLAllocHandle(3, sqlConnHandle, &sqlStmtHandle))
-                                    DataBaseDissconnect();
+                            DataBaseDissconnect();
 
-                                if (0 != SQLExecDirectW(sqlStmtHandle, (SQLWCHAR*)request.data(), -3)) { //try to query
+                        }
+                        else { //if query is OK
 
-                                    DataBaseDissconnect();
-                                    SQLFreeHandle(3, sqlStmtHandle);
+                            //declare output variable and pointer
+                            SQLCHAR sqlVersion[SQL_RESULT_LEN];
+                            SQLINTEGER ptrSqlVersion;
+                            while (SQLFetch(sqlFacultyCheck) == 0) { //for every query result
 
-                                }
-                                else { //if query is OK
+                                SQLGetData(sqlFacultyCheck, 1, 1, sqlVersion, SQL_RESULT_LEN, &ptrSqlVersion);
 
-                                    //declare output variable and pointer
-                                    memset(sqlVersion, 0, SQL_RESULT_LEN);
-                                    ptrSqlVersion = 0;
-                                    while (SQLFetch(sqlStmtHandle) == 0) { //for every query result
+                                std::string count = (char*)sqlVersion;
 
-                                        SQLGetData(sqlStmtHandle, 2, 1, sqlVersion, SQL_RESULT_LEN, &ptrSqlVersion);
+                                SQLFreeHandle(3, sqlFacultyCheck); //release query handle
 
-                                        std::string message_data((char*)sqlVersion); //take sender name (first response column)
+                                if (count == "0") { //if threr is no faculty
 
-                                        message_data += " ";
+                                    SQLHANDLE sqlFacultyInsert = NULL; //query handle
 
-                                        SQLGetData(sqlStmtHandle, 4, 1, sqlVersion, SQL_RESULT_LEN, &ptrSqlVersion);
+                                    if (0 != SQLAllocHandle(3, sqlConnHandle, &sqlFacultyInsert))
+                                        DataBaseDissconnect();
 
-                                        message_data += (char*)sqlVersion;
+                                    faculty_check = L"insert into chat (faculty) values('" + std::wstring(usr->student.faculty.begin(), usr->student.faculty.end()) + L"')";
 
-                                        server_ok.buf = &message_data[0];
-                                        server_ok.len = message_data.size();
+                                    if (0 != SQLExecDirectW(sqlFacultyInsert, (SQLWCHAR*)faculty_check.data(), -3)) { //try to query
 
-                                        if (WSASend(usr->sckt, &server_ok, 1, &SendBytes, 0, &sock_data->Overlapped, NULL) == SOCKET_ERROR) { //send messages which client needs
+                                        DataBaseDissconnect();
 
-                                            if (WSAGetLastError() != ERROR_IO_PENDING)
-                                            {
-
-                                                printf("WSASend() failed with error %d\n", WSAGetLastError());
-                                                return;
-
-                                            }
-
-                                        }
+                                    }
+                                    else
+                                    {
+                                        chats.insert(std::make_pair(usr->student.faculty, std::to_string(chats.size()+1))); //add newly created chat and its id to our list
                                     }
 
-                                    SQLFreeHandle(3, sqlStmtHandle); //release query handle
+                                    SQLFreeHandle(3, sqlFacultyInsert); //release query handle
 
                                 }
+
+                                else
+                                {
+                                    //NOW WE HAVE TO SEND ALL NEEDED MESSAGES TO CLIENT, CLIENT SENDS 'command login password meesage_id' , we have to send all NEW messages to client
+
+                                    std::string last_mess; //last message id which client has
+
+                                    sstream >> last_mess;
+
+                                    std::wstring request = L"select * from messages m inner join chat c on m.chat_id = c.chat_id where c.faculty = '" //create query 
+                                        + std::wstring(usr->student.faculty.begin(), usr->student.faculty.end())
+                                        + L"' and m.message_id > " + std::wstring(last_mess.begin(), last_mess.end())
+                                        + L" and m.msg_from <> '" + std::wstring(usr->student.login.begin(), usr->student.login.end()) + L"'";
+
+                                    SQLHANDLE sqlStmtHandle = NULL; //query handle
+
+                                    if (0 != SQLAllocHandle(3, sqlConnHandle, &sqlStmtHandle))
+                                        DataBaseDissconnect();
+
+                                    if (0 != SQLExecDirectW(sqlStmtHandle, (SQLWCHAR*)request.data(), -3)) { //try to query
+
+                                        DataBaseDissconnect();
+                                        SQLFreeHandle(3, sqlStmtHandle);
+
+                                    }
+                                    else { //if query is OK
+
+                                        //declare output variable and pointer
+                                        memset(sqlVersion, 0, SQL_RESULT_LEN);
+                                        ptrSqlVersion = 0;
+                                        while (SQLFetch(sqlStmtHandle) == 0) { //for every query result
+
+                                            SQLGetData(sqlStmtHandle, 2, 1, sqlVersion, SQL_RESULT_LEN, &ptrSqlVersion);
+
+                                            std::string message_data((char*)sqlVersion); //take sender name (first response column)
+
+                                            message_data += " ";
+
+                                            SQLGetData(sqlStmtHandle, 4, 1, sqlVersion, SQL_RESULT_LEN, &ptrSqlVersion);
+
+                                            message_data += (char*)sqlVersion;
+
+                                            server_ok.buf = &message_data[0];
+                                            server_ok.len = message_data.size();
+
+                                            if (WSASend(usr->sckt, &server_ok, 1, &SendBytes, 0, &sock_data->Overlapped, NULL) == SOCKET_ERROR) { //send messages which client needs
+
+                                                if (WSAGetLastError() != ERROR_IO_PENDING)
+                                                {
+
+                                                    printf("WSASend() failed with error %d\n", WSAGetLastError());
+                                                    return;
+
+                                                }
+
+                                            }
+                                        }
+
+                                        SQLFreeHandle(3, sqlStmtHandle); //release query handle
+
+                                    }
+                                }
+                            }
+
+                        }
+
+
+
+                        RecvBytes = 0;
+
+                        if (WSARecv(usr->sckt, &(sock_data->DataBuf), 1, &RecvBytes, &flags, &(sock_data->Overlapped), NULL) == SOCKET_ERROR) //start retrieving new data in overlapped mode
+                        {
+                            if (WSAGetLastError() != ERROR_IO_PENDING)
+                            {
+                                printf("WSARecv() failed with error %d\n", WSAGetLastError());
+                                return;
                             }
                         }
 
                     }
+                    else { //if user doesnt exist
 
-                    
+                        closesocket(usr->sckt);
+                        delete sock_data; //clear all user data
+                        delete usr;
 
-                    RecvBytes = 0;
+                    }
+                    int a = 5;
 
-                    if (WSARecv(usr->sckt, &(sock_data->DataBuf), 1, &RecvBytes, &flags, &(sock_data->Overlapped), NULL) == SOCKET_ERROR) //start retrieving new data in overlapped mode
-                    {
-                        if (WSAGetLastError() != ERROR_IO_PENDING)
-                        {
-                            printf("WSARecv() failed with error %d\n", WSAGetLastError());
-                            return;
+                }
+                else if (command.substr(0, 3) == "msg") {
+
+                    if (Connected(usr->sckt)) {
+                        SQLHANDLE addMsg = NULL; //query handle
+
+                        if (0 != SQLAllocHandle(3, sqlConnHandle, &addMsg))
+                            DataBaseDissconnect();
+
+                        command = command.substr(4, std::string::npos);
+
+                        std::wstring chat_id = std::wstring(chats.find(usr->student.faculty)->second.begin(), chats.find(usr->student.faculty)->second.end()); //get chat id for the faculty
+
+                        std::wstring insert_msg = L"insert into messages(msg_from,chat_id,msg_text) values('"
+                            + std::wstring(usr->student.login.begin(), usr->student.login.end()) //user login ex. 'w12345'
+                            + L"'," + chat_id //chat_id
+                            + L",'" + std::wstring(command.begin(), command.end()) + L"')"; //message text
+
+                        if (0 != SQLExecDirectW(addMsg, (SQLWCHAR*)insert_msg.data(), -3)) { //try to query
+
+                            DataBaseDissconnect();
+
                         }
+                        SQLFreeHandle(3, addMsg);
                     }
 
                 }
-                else { //if user doesnt exist
-
-                    closesocket(usr->sckt);
-                    delete sock_data; //clear all user data
-                    delete usr;
-
-                }
-                int a = 5;
 
             }
-            else if (command.substr(0, 3) == "msg") {
-
-                if (Connected(usr->sckt)) {
-                    SQLHANDLE addMsg = NULL; //query handle
-
-                    if (0 != SQLAllocHandle(3, sqlConnHandle, &addMsg))
-                        DataBaseDissconnect();
-
-                    command = command.substr(4, std::string::npos);
-
-                    std::wstring chat_id = std::wstring(chats.find(usr->student.faculty)->second.begin(), chats.find(usr->student.faculty)->second.end()); //get chat id for the faculty
-
-                    std::wstring insert_msg = L"insert into messages(msg_from,chat_id,msg_text) values('"
-                        + std::wstring(usr->student.login.begin(), usr->student.login.end()) //user login ex. 'w12345'
-                        + L"'," + chat_id //chat_id
-                        + L",'" + std::wstring(command.begin(), command.end()) + L"')"; //message text
-
-                    if (0 != SQLExecDirectW(addMsg, (SQLWCHAR*)insert_msg.data(), -3)) { //try to query
-
-                        DataBaseDissconnect();
-
-                    }
-                    SQLFreeHandle(3, addMsg);
-                }
-
-            }
-
         }
-
     }
 }
 
@@ -326,8 +330,6 @@ void server::FindAndErase(user* usr) {
 
 
 void server::Start() {
-
-    ThreadPool pool(8); //thread pool (2*systemthreads) , threads are used for better performance
 
     DataBaseConnect();
 
@@ -355,12 +357,10 @@ void server::Start() {
         return ;
     }
     
-    pool.AddTask([this]() {this->ConnectionAccepter(); }); //start acception handler in thread
+    tp->AddTask([this]() {this->ConnectionAccepter(); }); //start acception handler in thread
 
-    for (int i = 0; i < 7; ++i) //7 is the threads count in the thread pool
-        pool.AddTask([this]() {this->DataHandler(); }); //start data handler in thread
-
-    while(!stop){} //while funtion Stop() is not called the server will be working
+    for (unsigned int i = 1; i < tp->ThreadsNumber(); ++i) //7 is the threads count in the thread pool
+        tp->AddTask([this]() {this->DataHandler(); }); //start data handler in thread
 
 }
 
@@ -436,6 +436,7 @@ server::~server() {
     closesocket(server_socket);
 
     for (auto x : connected_users) {
+        closesocket(x->sckt);
         delete x;
     }
 

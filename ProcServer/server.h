@@ -16,7 +16,7 @@ class server
 {
 public :
 
-	server() = default;
+	server(ThreadPool*);
 
 	server(const server&) = delete;
 	server(server&&) = delete;
@@ -31,7 +31,11 @@ public :
 
 private :
 
+	ThreadPool * tp;
+
 	bool stop = false;
+
+	unsigned int threads = 4;
 
 	SQLHANDLE sqlConnHandle = NULL;
 	SQLHANDLE sqlEnvHandle = NULL;
