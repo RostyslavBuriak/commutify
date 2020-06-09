@@ -218,7 +218,7 @@ void login::SendRequest(inhandle& request,std::string opt = "") {
 
 
 bool login::CheckResponse(inhandle& hresponse) {
-	char buffer[5]{}; //enaugh to handle result
+	char buffer[5]{}; //enough to handle result
 
 	DWORD dwsize = 5; //size of buffer
 
