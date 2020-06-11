@@ -313,11 +313,11 @@ void server::HandleMessage(user* usr, sock_info* sock_data, std::string command)
 
 void server::SendFile(std::string filename,std::string filetype,std::string filepath, user* usr) {
 
-    std::ifstream file(filepath.data());
+    std::ifstream file(filepath.data(), std::ios::in | std::ios::binary);
 
     char buffer[1025]{};
 
-    std::string send_data (filename + "." + filetype +" ");
+    std::string send_data(filename + "." + filetype +" ");
 
     while (!file.eof()) {
 
@@ -325,7 +325,7 @@ void server::SendFile(std::string filename,std::string filetype,std::string file
 
         send_data += buffer;
 
-        send(usr->sckt, send_data.data(), send_data.size(), 0);
+        send(usr->sckt, buffer, 1024, 0);
 
         send_data = filename + "." + filetype + " ";
         memset(buffer, 0, 1024);

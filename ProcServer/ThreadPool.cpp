@@ -1,6 +1,5 @@
 #include "ThreadPool.h"
 
-
 ThreadPool::ThreadPool() :nthreads(1),stop(false) {
 
 	for (unsigned int i = 0; i < nthreads; ++i) {
@@ -10,27 +9,30 @@ ThreadPool::ThreadPool() :nthreads(1),stop(false) {
 
 				[this]() { //lambda for wating for tasks
 
-					std::function<void()> task; //create it before mutex lock 
+					while (!stop) {
+						std::function<void()> task; //create it before mutex lock 
 
-					{
-						std::unique_lock<std::mutex> ul(mtx); //unique_lock is used for condition var
+						{
+							std::unique_lock<std::mutex> ul(mtx); //unique_lock is used for condition var
 
-						cv.wait(ul, [this]() { //wait for tasks or stop of the programm
+							cv.wait(ul, [this]() { //wait for tasks or stop of the programm
 
-							return !tasks.empty() || stop;
+								return !tasks.empty() || stop;
 
-							});
+								});
 
-						if (stop)
-							return;
+							if (stop)
+								return;
 
-						task = std::move(tasks.front()); //take task from tasks container
+							task = std::move(tasks.front()); //take task from tasks container
 
-						tasks.pop(); //delete taken task from container
+							tasks.pop(); //delete taken task from container
+
+						}
+
+						task(); //run task
 
 					}
-
-					task(); //run task
 
 				}));
 
@@ -46,29 +48,30 @@ ThreadPool::ThreadPool(const size_t n):nthreads(n),stop(false) {
 			std::thread( //thread creation
 
 				[this]() { //lambda for wating for tasks
+					while (!stop) {
+						std::function<void()> task; //create it before mutex lock 
 
-					std::function<void()> task; //create it before mutex lock 
+						{
+							std::unique_lock<std::mutex> ul(mtx); //unique_lock is used for condition var
 
-					{
-						std::unique_lock<std::mutex> ul(mtx); //unique_lock is used for condition var
+							cv.wait(ul, [this]() { //wait for tasks or stop of the programm
 
-						cv.wait(ul, [this]() { //wait for tasks or stop of the programm
+								return !tasks.empty() || stop;
 
-							return !tasks.empty() || stop;
+								});
 
-							});
+							if (stop)
+								return;
 
-						if (stop)
-							return;
+							task = std::move(tasks.front()); //take task from tasks container
 
-						task = std::move(tasks.front()); //take task from tasks container
+							tasks.pop(); //delete taken task from container
 
-						tasks.pop(); //delete taken task from container
+						}
+
+						task(); //run task
 
 					}
-
-					task(); //run task
-
 				}));
 
 	}
@@ -108,27 +111,30 @@ void ThreadPool::AddThread(const size_t n) {
 
 				[this]() { //lambda for wating for tasks
 
-					std::function<void()> task; //create it before mutex lock 
+					while (!stop) {
+						std::function<void()> task; //create it before mutex lock 
 
-					{
-						std::unique_lock<std::mutex> ul(mtx); //unique_lock is used for condition var
+						{
+							std::unique_lock<std::mutex> ul(mtx); //unique_lock is used for condition var
 
-						cv.wait(ul, [this]() { //wait for tasks or stop of the programm
+							cv.wait(ul, [this]() { //wait for tasks or stop of the programm
 
-							return !tasks.empty() || stop;
+								return !tasks.empty() || stop;
 
-							});
+								});
 
-						if (stop)
-							return;
+							if (stop)
+								return;
 
-						task = std::move(tasks.front()); //take task from tasks container
+							task = std::move(tasks.front()); //take task from tasks container
 
-						tasks.pop(); //delete taken task from container
+							tasks.pop(); //delete taken task from container
+
+						}
+
+						task(); //run task
 
 					}
-
-					task(); //run task
 
 				}));
 
