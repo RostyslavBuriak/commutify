@@ -139,6 +139,21 @@ void htmlparser::DaneOgolneParseEN(Student& student) { //All needed data is loca
 }
 
 
+bool htmlparser::CheckResponse() {
+
+	std::string word;
+	std::istringstream sstream(text); //divide text by words
+
+	while (sstream >> word) { //while there are still words
+		if (word == "class=\"error_label\">Incorrect") { //if we find a needed word
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+
 std::string htmlparser::ViewDataParse(std::string value) {
 	std::string word;
 	std::istringstream sstream(text); //divide text by words

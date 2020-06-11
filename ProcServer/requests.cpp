@@ -218,16 +218,18 @@ void login::SendRequest(inhandle& request,std::string opt = "") {
 
 
 bool login::CheckResponse(inhandle& hresponse) {
-	char buffer[5]{}; //enough to handle result
+	char buffer[2048]{}; //enaugh to handle result
 
-	DWORD dwsize = 5; //size of buffer
+	DWORD dwsize = 2048; //size of buffer
 
-	HttpQueryInfoA(hresponse, HTTP_QUERY_STATUS_CODE, buffer, &dwsize, NULL); //buffer will be "200" if OK or any other if not
+	HttpQueryInfoA(hresponse, HTTP_QUERY_RAW_HEADERS_CRLF, buffer, &dwsize, NULL); //buffer will be "200" if OK or any other if not
 
 	std::string result = buffer;
 
 	if (result == "200") {
+
 		return 0;
+
 	}
 
 	return 1;
@@ -297,7 +299,7 @@ void login::SetLanguage(std::string lan = "pl") {
 }
 
 
-void login::Login() {
+bool login::Login() {
 	inhandle hloginrequest(OpenRequest("POST", "/wunet/Logowanie2.aspx")); //create Login request
 
 	BOOL decoding = 1;
@@ -312,9 +314,17 @@ void login::Login() {
 	params += viewstate; //add viewstate to params
 
 	SendRequest(hloginrequest, params); //Send login request
+
 	SetCookies(GetCookieFromResponse(hloginrequest)); //Add response cookies to our cookies
 
+	htmlparser parser(std::move(GetHtml(hloginrequest)));
+
+	if (parser.CheckResponse())
+		return 0;
+
 	InternetCloseHandle(hloginrequest);
+
+	return 1;
 }
 
 
@@ -335,15 +345,17 @@ void login::GetStudentData() {
 	htmlparser parser(html);
 	parser.DaneOgolneParseEN(*student);
 
+	InternetCloseHandle(hdaneogolne);
 }
 
 
 bool login::GetPersonData() {
 	SetupConnection();
 	GetCookies();
-	Login();
 	SetLanguage("en");
-	GetStudentData();
-	return 0;
+	if (Login()) {
+		GetStudentData();
+		return 0;
+	}
 }
 

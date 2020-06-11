@@ -35,8 +35,6 @@ private :
 
 	bool stop = false;
 
-	unsigned int threads = 4;
-
 	SQLHANDLE sqlConnHandle = NULL;
 	SQLHANDLE sqlEnvHandle = NULL;
 
@@ -68,6 +66,10 @@ private :
 	void FindAndErase(user*); //FInds and erases user from connected users list
 	void DataBaseConnect(); //Create the connection with database
 	void DataBaseDissconnect(); // Destroys connection with database
+	void HandleMessage(user*, sock_info*, std::string); //Handles text message
+	void HandleConnectionRequest(user*,sock_info*,std::string); //Handles connection request
+	void HandleFile(); //Handles file
+	void SendFile(std::string,std::string,std::string,user*); //Sends file
 	
 	bool Connected(SOCKET); //checks if user is connected
 	

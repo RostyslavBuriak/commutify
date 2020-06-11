@@ -26,6 +26,9 @@ public:
 	void DaneOgolneParsePL(Student&); //Get polish version of student data. Call SetLanguage("pl") before
 	void DaneOgolneParseEN(Student&); //Get english version of student data. Call SetLanguage("en") before
 	void SetText(std::string _text) { text = _text; } //set text
+
+	bool CheckResponse();
+
 private:
 	std::string text;
 };

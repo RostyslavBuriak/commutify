@@ -43,7 +43,7 @@ private:
 	void SendRequest(inhandle&,std::string);
 	void SetCookies(std::string);
 	void SetLanguage(std::string);
-	void Login();
+	bool Login();
 	void GetStudentData();
 	void GetStudentSubjectsData();
 
