@@ -280,7 +280,7 @@ server::~server() {
 
 void server::NotifyAll(user* usr,const std::string msg_time,std::vector<char> message) {
 
-    std::string message_data("msg " + msg_time + " " + usr->student.login + " " + usr->student.name + " ");
+    std::string message_data("msg " + msg_time + " " + usr->student.login + " " + std::to_string(usr->student.name.length()) + " " +  usr->student.name + " ");
 
     std::unique_ptr<char> up(new char[1]{});
 
@@ -300,11 +300,42 @@ void server::NotifyAll(user* usr,const std::string msg_time,std::vector<char> me
 }
 
 
+void server::NotifyAll(user* usr, const unsigned int namelength, const std::string time, const std::string filename, const std::string filetype, std::vector<char> filedata) {
+
+    std::string message_data("file " + time + " " + usr->student.login + " " + std::to_string(usr->student.name.length()) + " " + 
+        usr->student.name + " " + std::to_string(namelength) + " " + filename + " " + filetype);
+
+    for (auto  u : connected_users) {
+
+        if (u->student.faculty == usr->student.faculty && u->sckt != usr->sckt) {
+
+            std::unique_lock<std::mutex>ul(u->buffer_mtx);
+            send(u->sckt, message_data.data(), message_data.size(), 0);
+
+            std::string filepath("FILES/" + usr->student.faculty + "/" + filename + "." + filetype);
+
+            unsigned long long filesize = fs::file_size(filepath);
+
+            tp->AddTask(
+                [this, usr, namelength, time, filename, filetype, filedata, filesize, filepath]() {
+                    this->SendFile(filename, filetype, filepath, filesize, usr);
+                }
+            );
+
+        }
+
+    }
+
+}
+
+
 void server::RecvFile(user* usr, std::vector<char> file) {
 
     unsigned int namelength = GetFirstNumber(file);
 
     std::string filename = GetFileName(file, namelength);
+
+    CheckFileName(usr,filename);
 
     std::string filetype = GetFileType(file);
 
@@ -314,7 +345,53 @@ void server::RecvFile(user* usr, std::vector<char> file) {
 
     if (file.size() < 1024) { //indicates that end of file was reached
 
-        
+        std::wstring chat_id = std::wstring(chats.find(usr->student.faculty)->second.begin(), chats.find(usr->student.faculty)->second.end()); //get chat id for the faculty
+
+        SQLCHAR sqlVersion[1024];
+        SQLINTEGER ptrSqlVersion;
+
+        SQLHANDLE sqlAddFile = NULL, selectMsg = NULL; //query handle
+
+        if (0 != SQLAllocHandle(3, sqlConnHandle, &sqlAddFile))
+            DataBaseDissconnect();
+
+        std::wstring insert_req(
+            L"insert into messages (msg_type,msg_from,msg_chat_id,msg_text) values ('" +
+            std::wstring(filetype.begin(), filetype.end()) + L"','" +
+            std::wstring(usr->student.login.begin(), usr->student.login.end()) + L"'," +
+            chat_id + L",'" +
+            std::wstring(filename.begin(), filename.end()) + L"')"
+        );
+
+        if (0 != SQLExecDirectW(sqlAddFile, insert_req.data(), insert_req.length())) {   //try to query
+
+            DataBaseDissconnect();
+
+        }
+
+        std::wstring select_msg = L"select top 1 msg_time from messages order by msg_id desc";
+
+        std::string msg_time;
+
+        SQLFreeHandle(3, sqlAddFile);
+
+        if (0 != SQLAllocHandle(3, sqlConnHandle, &selectMsg))
+            DataBaseDissconnect();
+
+        if (0 != SQLExecDirectW(selectMsg, (SQLWCHAR*)select_msg.data(), select_msg.length())) {   //try to query
+
+            DataBaseDissconnect();
+
+        }
+        else
+        {
+            SQLFetch(selectMsg);
+
+            SQLGetData(selectMsg, 1, 1, sqlVersion, 1024, &ptrSqlVersion);
+
+            msg_time = (char*)sqlVersion;
+
+        }
 
     }
 
@@ -371,7 +448,7 @@ void server::HandleMessage(user* usr, sock_info* sock_data, std::vector<char> me
         if (0 != SQLAllocHandle(3, sqlConnHandle, &selectMsg))
             DataBaseDissconnect();
 
-        if (0 != SQLExecDirectW(addMsg, (SQLWCHAR*)select_msg.data(), select_msg.length())) {   //try to query
+        if (0 != SQLExecDirectW(selectMsg, (SQLWCHAR*)select_msg.data(), select_msg.length())) {   //try to query
 
             DataBaseDissconnect();
 
@@ -527,7 +604,7 @@ void server::HandleConnectionRequest(user* usr, sock_info* sock_data, std::strin
         else { //if query is OK
 
             //declare output variable and pointer
-            SQLCHAR sqlVersion[1025];
+            SQLCHAR sqlVersion[1024];
             SQLINTEGER ptrSqlVersion;
 
             while (SQLFetch(sqlFacultyCheck) == 0) { //for every query result
@@ -819,5 +896,24 @@ std::string server::GetFileType(std::vector<char>& vec) {
     }
 
     return filetype;
+
+}
+
+
+void server::CheckFileName(user * usr,std::string& filename) {
+
+    unsigned long long counter = 0;
+
+    for (;; counter++) {
+
+        std::string fullpath = "FILES/" + usr->student.faculty + "/" + filename;
+
+        if (fs::exists(fullpath)) {
+            break;
+        }
+
+        filename += "(" + std::to_string(counter) + ")";
+
+    }
 
 }

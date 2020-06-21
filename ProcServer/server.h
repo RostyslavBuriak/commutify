@@ -68,8 +68,10 @@ private :
 	void HandleMessage(user*, sock_info*, std::vector<char>  ); //Handles text message
 	void HandleConnectionRequest(user*,sock_info*,std::string); //Handles connection request
 	void SendFile(std::string,std::string,std::string, unsigned long long,user*); //Sends file
-	void NotifyAll(user* usr,const std::string, std::vector<char>); //notifies all users about the new message
+	void NotifyAll(user* ,const std::string, std::vector<char>); //notifies all users about the new message
+	void NotifyAll(user*, const unsigned int,const std::string, const std::string, const std::string, std::vector<char>); //notifies all users about the new file
 	void RecvFile(user*, std::vector<char>); //receives the file
+	void CheckFileName(user*,std::string&); //checks if file name is available ,if not returns available
 	
 	bool Connected(SOCKET); //checks if user is connected
 
