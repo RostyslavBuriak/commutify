@@ -10,8 +10,6 @@
 
 #pragma comment (lib, "Ws2_32.lib")
 
-#define buff_size 2048
-
 class server
 {
 public :
@@ -49,13 +47,14 @@ private :
 	struct sock_info {
 		OVERLAPPED Overlapped;
 		WSABUF DataBuf;
-		char Buffer[buff_size];
+		char Buffer[2048]{};
 	};
 
 	struct user {
 		Student student;
 		SOCKET sckt;
 		sock_info sock_data;
+		std::mutex buffer_mtx;
 	};
 
 	std::list<user*> connected_users;
@@ -66,12 +65,22 @@ private :
 	void FindAndErase(user*); //FInds and erases user from connected users list
 	void DataBaseConnect(); //Create the connection with database
 	void DataBaseDissconnect(); // Destroys connection with database
-	void HandleMessage(user*, sock_info*, std::string); //Handles text message
+	void HandleMessage(user*, sock_info*, std::vector<char>  ); //Handles text message
 	void HandleConnectionRequest(user*,sock_info*,std::string); //Handles connection request
-	void HandleFile(); //Handles file
-	void SendFile(std::string,std::string,std::string,user*); //Sends file
+	void SendFile(std::string,std::string,std::string, unsigned long long,user*); //Sends file
+	void NotifyAll(user* usr,const std::string, std::vector<char>); //notifies all users about the new message
+	void RecvFile(user*, std::vector<char>); //receives the file
 	
 	bool Connected(SOCKET); //checks if user is connected
+
+	char* Append(char*,const char *, const unsigned long long); //appends char array with char array
+	wchar_t* Append(wchar_t*, const wchar_t*, const unsigned long long); //appends wchar array with whcar array
+
+	unsigned int LengthOfName (const std::string); //returns amount of words appeared in string
+	unsigned int GetFirstNumber(std::vector<char>&); //Retrievs a vector and returns first number in it (erases this vector)
+
+	std::string GetFileName(std::vector<char>&,const unsigned int); //Retrievs a vector and returns file name from it (erases this vector)
+	std::string GetFileType(std::vector<char>&); //Retrievs a vector and returns file type from it (erases this vector)
 	
 };
 

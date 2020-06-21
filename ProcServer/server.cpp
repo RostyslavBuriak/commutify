@@ -58,7 +58,7 @@ void server::ConnectionAccepter() {
         }
 
         nuser->sock_data.DataBuf.buf = nuser->sock_data.Buffer;
-        nuser->sock_data.DataBuf.len = buff_size;
+        nuser->sock_data.DataBuf.len = 1024;
 
         DWORD RBytes;
 
@@ -74,14 +74,13 @@ void server::ConnectionAccepter() {
 }
 
 
-
 void server::DataHandler() {
     std::cout << "Started handling data\n";
 
     user * usr = nullptr;
     sock_info * sock_data = nullptr;
 
-    DWORD BytesTransferred, RecvBytes, Flags, SendBytes = 10;
+    DWORD BytesTransferred=0;
 
     while (true) {
 
@@ -93,12 +92,13 @@ void server::DataHandler() {
         }
         else
         {
+
             if (!BytesTransferred) { //user disconnected
 
                 FindAndErase(usr); //delete user from connected users list
                 closesocket(usr->sckt); //close user socket
                 delete usr; //clear all user data
-
+                continue;
             }
 
             else
@@ -106,16 +106,34 @@ void server::DataHandler() {
 
                 std::string command = sock_data->Buffer; //copy buffer to the string for convenient work
 
-                memset(sock_data->Buffer, 0, buff_size); //clear buffer
 
                 if (command.substr(0, 7) == "connect") {
+
+                    memset(sock_data->Buffer, 0, 2048); //clear buffer
 
                     HandleConnectionRequest(usr, sock_data, std::move(command));
 
                 }
                 else if (command.substr(0, 3) == "msg") {
 
-                    HandleMessage(usr, sock_data, std::move(command));
+                    std::vector<char> message(&sock_data->Buffer[4], &sock_data->Buffer[BytesTransferred]);
+
+                    memset(sock_data->Buffer, 0, 2048); //clear buffer
+
+                    BytesTransferred = 0;
+
+                    HandleMessage(usr, sock_data, std::move(message));
+
+                }
+                else if (command.substr(0, 4) == "file") {
+
+                    std::vector<char> message(&sock_data->Buffer[5], &sock_data->Buffer[BytesTransferred]);
+
+                    memset(sock_data->Buffer, 0, 2048); //clear buffer
+
+                    BytesTransferred = 0;
+
+                    RecvFile(usr, std::move(message)); //recv file
 
                 }
 
@@ -141,12 +159,9 @@ void server::FindAndErase(user* usr) {
 }
 
 
-
 void server::Start() {
 
     DataBaseConnect();
-
-    fs::create_directory("FILES"); //create directory for file storage
 
     WSADATA wsaDataRcp;
     WSAStartup(MAKEWORD(2, 2), &wsaDataRcp);
@@ -174,11 +189,9 @@ void server::Start() {
     
     tp->AddTask([this]() {this->ConnectionAccepter(); }); //start acception handler in thread
 
-    for (unsigned int i = 1; i < (tp->ThreadsNumber()/2); ++i) //7 is the threads count in the thread pool
-        tp->AddTask([this]() {this->DataHandler(); }); //start data handler in thread
+    tp->AddTask([this]() {this->DataHandler(); }); //start data handler in thread
 
 }
-
 
 
 void server::DataBaseDissconnect() {
@@ -222,6 +235,8 @@ void server::DataBaseConnect() {
     }
     else { //if query is OK
 
+        fs::create_directory("FILES"); //create directory for file storage
+
         //declare output variable and pointer
         SQLCHAR sqlVersion[SQL_RESULT_LEN];
         SQLINTEGER ptrSqlVersion;
@@ -234,6 +249,11 @@ void server::DataBaseConnect() {
             SQLGetData(sqlStmtHandle, 2, 1, sqlVersion, SQL_RESULT_LEN, &ptrSqlVersion);
 
             std::string faculty = (char*)sqlVersion;
+
+            std::string dirname("FILES/");
+            dirname += (char*)sqlVersion;
+
+            fs::create_directory(dirname.c_str()); //for every faculty create its own directory for files
 
             chats.insert(std::make_pair(faculty,chat_id));
         }
@@ -258,43 +278,120 @@ server::~server() {
 }
 
 
-void server::HandleFile() {
+void server::NotifyAll(user* usr,const std::string msg_time,std::vector<char> message) {
 
+    std::string message_data("msg " + msg_time + " " + usr->student.login + " " + usr->student.name + " ");
 
+    std::unique_ptr<char> up(new char[1]{});
+
+    up.reset(Append(up.get(), message_data.c_str(), message_data.size()));
+    up.reset(Append(up.get(), &message[0], message.size()));
+
+    for (auto user : connected_users) {
+
+        if (user->student.faculty == usr->student.faculty && user->sckt != usr->sckt) {
+            std::unique_lock<std::mutex>ul(user->buffer_mtx);
+            send(user->sckt, up.get(), message_data.size() + message.size(), 0);
+
+        }
+
+    }
 
 }
 
 
-void server::HandleMessage(user* usr, sock_info* sock_data, std::string command) {
+void server::RecvFile(user* usr, std::vector<char> file) {
 
-    DWORD BytesTransferred, RecvBytes, Flags, SendBytes = 10;
+    unsigned int namelength = GetFirstNumber(file);
+
+    std::string filename = GetFileName(file, namelength);
+
+    std::string filetype = GetFileType(file);
+
+    std::ofstream ofile("FILES/" + usr->student.faculty + "/" + filename + "." + filetype, std::ios::out | std::ios::binary);
+
+    ofile.write(&file[0], file.size());
+
+    if (file.size() < 1024) { //indicates that end of file was reached
+
+        
+
+    }
+
+    ofile.close();
+
+}
+
+
+void server::HandleMessage(user* usr, sock_info* sock_data, std::vector<char> message) {
 
     if (Connected(usr->sckt)) {
-        SQLHANDLE addMsg = NULL; //query handle
+
+        SQLCHAR sqlVersion[1025];
+        SQLINTEGER ptrSqlVersion;
+
+        DWORD RecvBytes;
+
+        SQLHANDLE addMsg = NULL,selectMsg = NULL; //query handle
 
         if (0 != SQLAllocHandle(3, sqlConnHandle, &addMsg))
-            DataBaseDissconnect();
-
-        command = command.substr(4, std::string::npos);
+           DataBaseDissconnect();
 
         std::wstring chat_id = std::wstring(chats.find(usr->student.faculty)->second.begin(), chats.find(usr->student.faculty)->second.end()); //get chat id for the faculty
 
 
-        std::wstring insert_msg = L"insert into messages(msg_from,chat_id,msg_type,msg_text) values('"
-            + std::wstring(usr->student.login.begin(), usr->student.login.end()) //user login ex. 'w12345'
-            + L"'," + chat_id //chat_id
-            + L",'" + std::wstring(command.begin(), command.end()) + L"')"; //message text
+        std::wstring insert_msg = L"insert into messages(msg_from,msg_chatid,msg_type,msg_text) values('"
+            + std::wstring(usr->student.login.begin(), usr->student.login.end())     //user login ex. 'w12345'
+            + L"'," + chat_id                                                       //chat_id
+            +L",'%text'"
+            + L",'";
+        
+        std::unique_ptr<wchar_t> up(new wchar_t[1]{});
 
-        query_mtx.lock();
+        up.reset(Append(up.get(), insert_msg.c_str(), insert_msg.length())); 
+        up.reset(Append(up.get(), std::wstring(message.begin(),message.end()).c_str(), message.size()));//message text from 4th element in array(after 'msg ') and next messagelength bytes
+        up.reset(Append(up.get(),L"')",3));
 
-        if (0 != SQLExecDirectW(addMsg, (SQLWCHAR*)insert_msg.data(), -3)) { //try to query
+        std::unique_lock<std::mutex> ul(query_mtx);
+
+        unsigned long long query_size = insert_msg.length() + message.size() + 2;
+
+        if (0 != SQLExecDirectW(addMsg, (SQLWCHAR*)up.get(), query_size)) {   //try to query
+
+           DataBaseDissconnect();
+
+        }
+
+        std::wstring select_msg = L"select top 1 msg_time from messages order by msg_id desc";
+
+        std::string msg_time;
+
+        SQLFreeHandle(3, addMsg);
+
+        if (0 != SQLAllocHandle(3, sqlConnHandle, &selectMsg))
+            DataBaseDissconnect();
+
+        if (0 != SQLExecDirectW(addMsg, (SQLWCHAR*)select_msg.data(), select_msg.length())) {   //try to query
 
             DataBaseDissconnect();
 
         }
+        else
+        {
+            SQLFetch(selectMsg);
 
-        query_mtx.unlock();
+            SQLGetData(selectMsg, 1, 1, sqlVersion, 1024, &ptrSqlVersion);
 
+            msg_time = (char*)sqlVersion;
+
+
+        }
+
+        ul.unlock();
+
+        SQLFreeHandle(3, selectMsg);
+
+        NotifyAll(usr,std::move(msg_time),std::move(message));
 
         if (WSARecv(usr->sckt, &(sock_data->DataBuf), 1, &RecvBytes, &flags, &(sock_data->Overlapped), NULL) == SOCKET_ERROR) //start retrieving new data in overlapped mode
         {
@@ -305,32 +402,38 @@ void server::HandleMessage(user* usr, sock_info* sock_data, std::string command)
             }
         }
 
-        SQLFreeHandle(3, addMsg);
     }
-
 }
 
 
-void server::SendFile(std::string filename,std::string filetype,std::string filepath, user* usr) {
+void server::SendFile(std::string filename,std::string filetype,std::string filepath,unsigned long long filesize, user* usr) {
 
     std::ifstream file(filepath.data(), std::ios::in | std::ios::binary);
 
-    char buffer[1025]{};
+    char buffer[1024];
 
-    std::string send_data(filename + "." + filetype +" ");
+    std::string send_data("file " + std::to_string(filename.length()) + " " + filename + " " + filetype + " ");
 
     while (!file.eof()) {
 
+        std::unique_ptr<char> up(new char[1]{});
+
         file.read(buffer, 1024);
 
-        send_data += buffer;
+        up.reset(Append(up.get(), send_data.c_str(), send_data.size()));
+        up.reset(Append(up.get(), buffer, file.gcount()));
 
-        send(usr->sckt, buffer, 1024, 0);
+        std::unique_lock<std::mutex>ul(usr->buffer_mtx);
+        send(usr->sckt, up.get(), send_data.size() + file.gcount(), 0);
 
-        send_data = filename + "." + filetype + " ";
         memset(buffer, 0, 1024);
 
     }
+
+    std::unique_lock<std::mutex>ul(usr->buffer_mtx);
+    send(usr->sckt, send_data.data(), send_data.size(), 0);
+
+    file.close();
 
 }
 
@@ -347,8 +450,13 @@ void server::HandleConnectionRequest(user* usr, sock_info* sock_data, std::strin
 
     sstream >> usr->student.password;
 
-    login lgn(&usr->student); //try to get user data
-    lgn.GetPersonData();
+    std::mutex request_mtx;
+    {
+        std::unique_lock<std::mutex>ul(request_mtx);
+        login lgn(&usr->student); //try to get user data
+        lgn.GetPersonData(); 
+    }
+
 
     if (!usr->student.semester.empty()) { //if user exists
 
@@ -402,20 +510,8 @@ void server::HandleConnectionRequest(user* usr, sock_info* sock_data, std::strin
             + "%" + usr->student.semester
             + "%" + usr->student.specialization;
 
-        WSABUF server_ok{ server_OK.size(), &server_OK[0] }; //server answer if everything is OK
+        send(usr->sckt, server_OK.data(), server_OK.length(), 0);
 
-
-            if (WSASend(usr->sckt, &server_ok, 1, &SendBytes, 0, &sock_data->Overlapped, NULL) == SOCKET_ERROR) { //send response that everything is OK
-
-                if (WSAGetLastError() != ERROR_IO_PENDING)
-                {
-
-                    printf("WSASend() failed with error %d\n", WSAGetLastError());
-                    return;
-
-                }
-
-            }
         SQLHANDLE sqlFacultyCheck = NULL; //query handle
 
         if (0 != SQLAllocHandle(3, sqlConnHandle, &sqlFacultyCheck))
@@ -431,12 +527,12 @@ void server::HandleConnectionRequest(user* usr, sock_info* sock_data, std::strin
         else { //if query is OK
 
             //declare output variable and pointer
-            SQLCHAR sqlVersion[SQL_RESULT_LEN];
+            SQLCHAR sqlVersion[1025];
             SQLINTEGER ptrSqlVersion;
 
             while (SQLFetch(sqlFacultyCheck) == 0) { //for every query result
 
-                SQLGetData(sqlFacultyCheck, 1, 1, sqlVersion, SQL_RESULT_LEN, &ptrSqlVersion);
+                SQLGetData(sqlFacultyCheck, 1, 1, sqlVersion, 1024, &ptrSqlVersion);
 
                 std::string count = (char*)sqlVersion;
 
@@ -485,64 +581,70 @@ void server::HandleConnectionRequest(user* usr, sock_info* sock_data, std::strin
                     if (0 != SQLAllocHandle(3, sqlConnHandle, &sqlStmtHandle))
                         DataBaseDissconnect();
 
-                    query_mtx.lock();
-
+                    std::unique_lock<std::mutex> ul(query_mtx);
                     if (0 != SQLExecDirectW(sqlStmtHandle, (SQLWCHAR*)request.data(), -3)) { //try to query
 
                         DataBaseDissconnect();
                         SQLFreeHandle(3, sqlStmtHandle);
+                        ul.unlock();
 
                     }
                     else { //if query is OK
 
-                        query_mtx.unlock();
+                        ul.unlock();
 
                         //declare output variable and pointer
-                        memset(sqlVersion, 0, SQL_RESULT_LEN);
+                        memset(sqlVersion, 0, 1024);
                         ptrSqlVersion = 0;
-
-                        std::future<int> ft;
 
                         while (SQLFetch(sqlStmtHandle) == 0) { //for every query result
 
-                            SQLGetData(sqlStmtHandle, 1, 1, sqlVersion, SQL_RESULT_LEN, &ptrSqlVersion);
+                            SQLGetData(sqlStmtHandle, 1, 1, sqlVersion, 1024, &ptrSqlVersion); //1025 is the size of sqlVersion buffer
 
-                            if (std::strcmp((char*)sqlVersion, "text") == 0) {
+                            if (std::strcmp((char*)sqlVersion, "%text") == 0) {
 
-                                std::string message_data("SERVER SYNCH "); 
+                                std::string message_data("SERVERSYNC ");
 
                                 message_data += (char*)sqlVersion; //message type
                                 message_data += " ";
 
-                                SQLGetData(sqlStmtHandle, 2, 1, sqlVersion, SQL_RESULT_LEN, &ptrSqlVersion); //message  time
+                                SQLGetData(sqlStmtHandle, 2, 1, sqlVersion, 1024, &ptrSqlVersion); //message  time
 
                                 message_data += (char*)sqlVersion;
                                 message_data += " ";
 
-                                SQLGetData(sqlStmtHandle, 3, 1, sqlVersion, SQL_RESULT_LEN, &ptrSqlVersion); //sender login
+                                SQLGetData(sqlStmtHandle, 3, 1, sqlVersion, 1024, &ptrSqlVersion); //sender login
 
                                 message_data += (char*)sqlVersion;
                                 message_data += " ";
 
-                                SQLGetData(sqlStmtHandle, 4, 1, sqlVersion, SQL_RESULT_LEN, &ptrSqlVersion); //sender fullname
+                                SQLGetData(sqlStmtHandle, 4, 1, sqlVersion, 1024, &ptrSqlVersion); //sender fullname
 
+                                message_data+= std::to_string(ptrSqlVersion);//fullname amount of chars
+                                message_data += " ";
                                 message_data += (char*)sqlVersion;
                                 message_data += " ";
 
-                                SQLGetData(sqlStmtHandle, 5, 1, sqlVersion, SQL_RESULT_LEN, &ptrSqlVersion); //message text
+                                SQLGetData(sqlStmtHandle, 5, 1, sqlVersion, 1024, &ptrSqlVersion); //message text
 
-                                message_data += (char*)sqlVersion;
+                                std::unique_ptr<char> up(new char[1]{});
 
-                                if (send(usr->sckt, message_data.data(), message_data.size(), 0) == SOCKET_ERROR) { //send messages which client needs in BLOCKING CALL
+                                message_data += std::to_string(ptrSqlVersion); //message length without '\0'
+                                message_data += " ";
 
-                                    continue;
+                                up.reset(Append(up.get(), message_data.c_str(), message_data.size()));
+                                up.reset(Append(up.get(), (char*)sqlVersion, (ptrSqlVersion+1)));
 
-                                }
+                                std::unique_lock<std::mutex>ul(usr->buffer_mtx);
+
+                                send(usr->sckt, up.get(), message_data.size() + ptrSqlVersion, 0);
+
+                                memset(sqlVersion, 0, 1024);
+
                             }
-
                             else {
 
-                                std::string message_data("SERVER SYNCH "),
+                                std::string message_data("SERVERSYNC "),
                                     file_type((char*)sqlVersion),
                                     file_name;
 
@@ -566,21 +668,19 @@ void server::HandleConnectionRequest(user* usr, sock_info* sock_data, std::strin
 
                                 SQLGetData(sqlStmtHandle, 5, 1, sqlVersion, SQL_RESULT_LEN, &ptrSqlVersion); //file name
 
-
-
                                 message_data += (char*)sqlVersion;
                                 file_name = (char*)sqlVersion;
 
-                                std::string file_path("FILES/" + file_name + "." + file_type); //file name
+                                std::string file_path("FILES/" + usr->student.faculty + "/" + file_name + "." + file_type); //file name
 
-                                long long file_size = fs::file_size(file_path);
+                                const unsigned long long file_size = fs::file_size(file_path);
                                 message_data += " " + std::to_string(file_size);
 
                                 send(usr->sckt, message_data.data(), message_data.size(), 0); //send notification
 
                                 tp->AddTask( //Start file sending in NEW thread
-                                    [this, file_name, file_type,file_path, usr]() {
-                                        this->SendFile(file_name, file_type,file_path, usr);
+                                    [this, file_name, file_type,file_path,file_size, usr]() {
+                                        this->SendFile(file_name, file_type, file_path, file_size, usr);
                                     }
                                 );
 
@@ -603,7 +703,6 @@ void server::HandleConnectionRequest(user* usr, sock_info* sock_data, std::strin
             if (WSAGetLastError() != ERROR_IO_PENDING)
             {
                 printf("WSARecv() failed with error %d\n", WSAGetLastError());
-                return;
             }
         }
 
@@ -614,5 +713,111 @@ void server::HandleConnectionRequest(user* usr, sock_info* sock_data, std::strin
         delete usr;
 
     }
+
+}
+
+
+char* server::Append(char* dst, const char* src, const unsigned long long srclen) { 
+
+    char* b = new char[srclen + std::strlen(dst) + 1]{};
+    
+    memcpy(b, dst, std::strlen(dst));
+    memcpy(&b[std::strlen(dst)], src, srclen);
+
+    return b;
+
+}
+
+
+wchar_t* server::Append(wchar_t* dst, const wchar_t* src, const unsigned long long srclen) {
+
+    wchar_t* b = new wchar_t[srclen*2 + std::wcslen(dst) + 1]{}; //multiply size because wchar is 2 times bigger than char
+
+    memcpy(b, dst, std::wcslen(dst)*2);
+    memcpy(&b[std::wcslen(dst)], src, srclen*2);
+
+    return b;
+
+}
+
+
+unsigned int server::LengthOfName(const std::string name) {
+
+    unsigned int counter(1);
+
+    for (auto c : name) {
+
+        if (c == ' ') {
+
+            ++counter;
+
+        }
+
+    }
+
+    return counter;
+
+}
+
+
+unsigned int server::GetFirstNumber(std::vector<char>& vec) {
+
+    std::string number;
+
+
+    for (auto c = vec.begin(); c != vec.end(); c = vec.begin()) {
+
+        if (*c == ' ') {
+
+            vec.erase(vec.begin());
+
+            break;
+
+        }
+
+        number += *c;
+
+        vec.erase(vec.begin());
+
+    }
+
+
+    return std::stoi(number);
+
+}
+
+
+std::string server::GetFileName(std::vector<char>& vec, const unsigned int namelength) {
+
+    std::string filename(vec.begin(), vec.begin() + namelength);
+
+    vec.erase(vec.begin(), vec.begin() + namelength + 1);
+
+    return filename;
+
+}
+
+
+std::string server::GetFileType(std::vector<char>& vec) {
+
+    std::string filetype;
+
+    for (auto c = vec.begin(); c != vec.end();  c = vec.begin()) {
+
+        if (*c == ' ') {
+
+            vec.erase(vec.begin());
+
+            break;
+
+        }
+
+        filetype += *c;
+
+        vec.erase(vec.begin());
+
+    }
+
+    return filetype;
 
 }
