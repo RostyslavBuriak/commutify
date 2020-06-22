@@ -71,7 +71,7 @@ private :
 	void NotifyAll(user* ,const std::string, std::vector<char>); //notifies all users about the new message
 	void NotifyAll(user*, const unsigned int,const std::string, const std::string, const std::string, std::vector<char>); //notifies all users about the new file
 	void RecvFile(user*, std::vector<char>); //receives the file
-	void CheckFileName(user*,std::string&); //checks if file name is available ,if not returns available
+	void CheckFileName(user *,std::string&,std::string); //checks if file name is available ,if not returns available
 	
 	bool Connected(SOCKET); //checks if user is connected
 

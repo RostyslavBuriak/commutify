@@ -335,9 +335,9 @@ void server::RecvFile(user* usr, std::vector<char> file) {
 
     std::string filename = GetFileName(file, namelength);
 
-    CheckFileName(usr,filename);
-
     std::string filetype = GetFileType(file);
+
+    CheckFileName(usr, filename,filetype);
 
     std::ofstream ofile("FILES/" + usr->student.faculty + "/" + filename + "." + filetype, std::ios::out | std::ios::binary);
 
@@ -356,7 +356,7 @@ void server::RecvFile(user* usr, std::vector<char> file) {
             DataBaseDissconnect();
 
         std::wstring insert_req(
-            L"insert into messages (msg_type,msg_from,msg_chat_id,msg_text) values ('" +
+            L"insert into messages (msg_type,msg_from,msg_chatid,msg_text) values ('" +
             std::wstring(filetype.begin(), filetype.end()) + L"','" +
             std::wstring(usr->student.login.begin(), usr->student.login.end()) + L"'," +
             chat_id + L",'" +
@@ -390,6 +390,8 @@ void server::RecvFile(user* usr, std::vector<char> file) {
             SQLGetData(selectMsg, 1, 1, sqlVersion, 1024, &ptrSqlVersion);
 
             msg_time = (char*)sqlVersion;
+
+            NotifyAll(usr, namelength, msg_time, filename, filetype, std::move(file));
 
         }
 
@@ -900,19 +902,22 @@ std::string server::GetFileType(std::vector<char>& vec) {
 }
 
 
-void server::CheckFileName(user * usr,std::string& filename) {
+void server::CheckFileName(user * usr,std::string& filename,std::string filetype) {
 
     unsigned long long counter = 0;
 
+    std::string scounter;
+
     for (;; counter++) {
 
-        std::string fullpath = "FILES/" + usr->student.faculty + "/" + filename;
+        std::string filepath = "FILES/" + usr->student.faculty + "/" + filename + scounter + "." + filetype;
 
-        if (fs::exists(fullpath)) {
+        if (!fs::exists(filepath)) {
+            filename += scounter;
             break;
         }
 
-        filename += "(" + std::to_string(counter) + ")";
+        scounter = "(" + std::to_string(counter) + ")";
 
     }
 
