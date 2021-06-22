@@ -109,6 +109,9 @@ void server::DataHandler() {
 
                 if (command.substr(0, 7) == "connect") {
 
+					if (Connected(usr->sckt))
+						continue;
+
                     memset(sock_data->Buffer, 0, 2048); //clear buffer
 
                     HandleConnectionRequest(usr, sock_data, std::move(command));
@@ -216,7 +219,7 @@ void server::DataBaseConnect() {
     
     SQLDriverConnectW(sqlConnHandle,
         NULL,
-        (SQLWCHAR*)L"DRIVER={SQL Server};SERVER=DESKTOP-BGNLAUK;DATABASE=master;UID=;PWD=;",
+        (SQLWCHAR*)L"DRIVER={SQL Server};SERVER=DESKTOP-4863CP9;DATABASE=master;UID=;PWD=;",
         -3,
         retconstring,
         1024,
@@ -281,6 +284,8 @@ server::~server() {
 void server::NotifyAll(user* usr,const std::string msg_time,std::vector<char> message) {
 
     std::string message_data("msg " + msg_time + " " + usr->student.login + " " + std::to_string(usr->student.name.length()) + " " +  usr->student.name + " ");
+
+	message_data = std::to_string(message.size() + message_data.size()) + " " + message_data;
 
     std::unique_ptr<char> up(new char[1]{});
 
@@ -516,10 +521,10 @@ void server::SendFile(std::string filename,std::string filetype,std::string file
 
 }
 
+std::string toUtf8(const std::wstring& str);
+
 
 void server::HandleConnectionRequest(user* usr, sock_info* sock_data, std::string command) {
-
-    std::wstring str(std::wstring(usr->student.login.begin(), usr->student.login.end()));
 
     DWORD BytesTransferred, RecvBytes, Flags, SendBytes = 10;
 
@@ -588,6 +593,8 @@ void server::HandleConnectionRequest(user* usr, sock_info* sock_data, std::strin
             + "%" + usr->student.department
             + "%" + usr->student.semester
             + "%" + usr->student.specialization;
+
+		server_OK = std::to_string(server_OK.length()) + " " + server_OK;
 
         send(usr->sckt, server_OK.data(), server_OK.length(), 0);
 
@@ -711,10 +718,14 @@ void server::HandleConnectionRequest(user* usr, sock_info* sock_data, std::strin
                                 message_data += std::to_string(ptrSqlVersion); //message length without '\0'
                                 message_data += " ";
 
+								message_data = std::to_string(message_data.size() + ptrSqlVersion) + " " + message_data;
+
                                 up.reset(Append(up.get(), message_data.c_str(), message_data.size()));
-                                up.reset(Append(up.get(), (char*)sqlVersion, (ptrSqlVersion+1)));
+                                up.reset(Append(up.get(), (char*)sqlVersion, ptrSqlVersion + 1));
 
                                 std::unique_lock<std::mutex>ul(usr->buffer_mtx);
+
+								std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
                                 send(usr->sckt, up.get(), message_data.size() + ptrSqlVersion, 0);
 
