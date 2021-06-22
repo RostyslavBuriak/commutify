@@ -1,0 +1,186 @@
+* { font-family: Nunito; }
+
+#loginWidget {
+    background-color: #F4F4FB;
+}
+
+#loginWidget .QFrame {
+    background-color: white;
+    border-radius: 10px;
+}
+
+#loginWidget QFrame QLabel#loginText1 {
+    color: #303778;
+    font-weight: bold;
+    font-size: 36px;
+}
+
+#loginWidget QLabel#loginText2 {
+    color: #303778;
+    font-weight: 300;
+    font-size: 26px;
+}
+
+#loginWidget QLineEdit[valid=true] {
+    border-bottom: 1px solid #BDBDBD;
+    border-radius: 0;
+}
+
+#loginWidget QLineEdit[valid=false] {
+    border-bottom: 1px solid red;
+    border-radius: 0;
+}
+
+#loginWidget QLabel#loginFail {
+    color: red;
+}
+
+#loginWidget QPushButton {
+    background: #6874E8;
+    border: none;
+    border-radius: 15px;
+    font: normal bold 28px;
+    color: white;
+}
+
+#loginWidget QLabel#copyright {
+    color: rgba(48, 55, 120, 0.4);
+    background-color: rgba(0, 0, 0, 0);
+    font-size: 20px;
+}
+
+#loginWidget QLabel#version {
+    color: rgba(48, 55, 120, 0.4);
+    background-color: rgba(0, 0, 0, 0);
+    font-size: 18px;
+}
+
+
+
+#mainWindow {
+    background-color: #F4F4FB;
+}
+
+/* top section */
+
+#mainWindow QFrame#topPanel {
+    background-color: #FFFFFF;
+}
+
+#mainWindow QLabel#logoIcon {
+    background-image: url(:/images/resources/img/logoiconbg.png);
+    color: #FFFFFF;
+    font-size: 20px;
+    font-weight: 800;
+}
+
+#mainWindow QLabel#logoName {
+    font-size: 20px;
+    font-weight: bold;
+    color: #6876E8;
+}
+
+#mainWindow QLabel#activeDialogName {
+    font-size: 19px;
+    font-weight: 700;
+    color: #000000;
+}
+
+#globalOptions QPushButton {
+    background-color: white;
+    border: none;
+}
+
+/* end of top section */
+
+/* left section */
+
+#mainWindow QFrame#userInfo {
+    border-radius: 15px;
+    background-color: #FFFFFF;
+}
+
+#mainWindow QLabel#userName {
+    font-weight: 700;
+    font-size: 16px;
+}
+
+#mainWindow QLabel#userFaculty {
+    font-weight: 400;
+    font-size: 14px;
+    color: #828282;
+}
+
+#mainWindow QLineEdit#searchField {
+    border-radius: 10px;
+    background-color: #FFFFFF;
+    padding-left: 5px;
+}
+
+/* end of left section */
+
+/* middle section */
+
+#messageArea {
+    background-color: transparent;
+}
+
+#maWidget {
+    background-color: blue;
+}
+
+#mainWindow QPushButton#attachmentButton {
+    background-color: #6874E8;
+    border-radius: 10px;
+}
+
+#mainWindow InputField {
+    background-color: #FFFFFF;
+}
+
+#mainWindow QPushButton#sendMessage {
+    background-color: #FFFFFF;
+    border-radius: 10px;
+}
+
+/* end of middle section */
+
+/* right section */
+
+#mainWindow QFrame#chatOptions {
+    background-color: #FFFFFF;
+    border-radius: 10px;
+}
+
+#chatOptions QPushButton {
+    background-color: #FFFFFF;
+    border: none;
+}
+
+#memberList {
+    background-color: #FFFFFF;
+    border-radius: 10px;
+}
+
+#memberWidget {
+    background-color: blue;
+}
+
+#memberWidget QPushButton {
+    background-color: transparent;
+    border: none;
+}
+
+#memberWidget[online=true] #memberLastSeen {
+    font-weight: 600;
+    font-size: 12px;
+    color: #6874E8;
+}
+
+#memberWidget[online=false] #memberLastSeen {
+    font-weight: 600;
+    font-size: 12px;
+    color: #BDBDBD;
+}
+
+

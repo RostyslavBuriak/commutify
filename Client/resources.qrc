@@ -1,0 +1,45 @@
+<RCC>
+    <qresource prefix="/images">
+        <file>resources/img/addAttachmentIcon.png</file>
+        <file>resources/img/darkMode.png</file>
+        <file>resources/img/file.png</file>
+        <file>resources/img/image.png</file>
+        <file>resources/img/info.png</file>
+        <file>resources/img/link.png</file>
+        <file>resources/img/login.png</file>
+        <file>resources/img/logo.png</file>
+        <file>resources/img/logoiconbg.png</file>
+        <file>resources/img/logOut.png</file>
+        <file>resources/img/mute.png</file>
+        <file>resources/img/search.png</file>
+        <file>resources/img/sendButton.png</file>
+        <file>resources/img/settings.png</file>
+        <file>resources/img/user1.png</file>
+        <file>resources/img/user2.png</file>
+        <file>resources/img/user3.png</file>
+        <file>resources/img/user4.png</file>
+        <file>resources/img/userContextOptions.png</file>
+        <file>resources/img/e.png</file>
+        <file>resources/img/r.png</file>
+        <file>resources/img/y.png</file>
+    </qresource>
+    <qresource prefix="/font">
+        <file>resources/Nunito/Nunito-Black.ttf</file>
+        <file>resources/Nunito/Nunito-BlackItalic.ttf</file>
+        <file>resources/Nunito/Nunito-Bold.ttf</file>
+        <file>resources/Nunito/Nunito-BoldItalic.ttf</file>
+        <file>resources/Nunito/Nunito-ExtraBold.ttf</file>
+        <file>resources/Nunito/Nunito-ExtraBoldItalic.ttf</file>
+        <file>resources/Nunito/Nunito-ExtraLight.ttf</file>
+        <file>resources/Nunito/Nunito-ExtraLightItalic.ttf</file>
+        <file>resources/Nunito/Nunito-Italic.ttf</file>
+        <file>resources/Nunito/Nunito-Light.ttf</file>
+        <file>resources/Nunito/Nunito-LightItalic.ttf</file>
+        <file>resources/Nunito/Nunito-Regular.ttf</file>
+        <file>resources/Nunito/Nunito-SemiBold.ttf</file>
+        <file>resources/Nunito/Nunito-SemiBoldItalic.ttf</file>
+    </qresource>
+    <qresource prefix="/style">
+        <file>style.css</file>
+    </qresource>
+</RCC>
